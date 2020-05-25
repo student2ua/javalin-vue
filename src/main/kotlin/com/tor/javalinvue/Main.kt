@@ -4,6 +4,8 @@ import cc.vileda.openapi.dsl.info
 import cc.vileda.openapi.dsl.openapiDsl
 import io.javalin.Javalin
 import io.javalin.apibuilder.ApiBuilder.*
+import io.javalin.core.compression.Brotli
+import io.javalin.core.compression.Gzip
 import io.javalin.core.security.Role
 import io.javalin.core.security.SecurityUtil.roles
 import io.javalin.core.util.Header
@@ -20,20 +22,27 @@ enum class AppRole : Role { ANYONE, LOGGED_IN }
 fun main() {
     val port = 8080
     val app = Javalin.create { config ->
-                config.registerPlugin(getConfiguredApiPlugin())
+        config.registerPlugin(getConfiguredApiPlugin())
         config.defaultContentType = "application/json"
 
 //        config.addStaticFiles("/static/css");
 
         config.enableWebjars()
-      /*  config.accessManager { handler, ctx, permRoles ->
+        config.accessManager { handler, ctx, permRoles ->
             when {
                 AppRole.ANYONE in permRoles -> handler.handle(ctx)
 //                AppRole.LOGGED_IN in permRoles && anyUsernameProvided(ctx) -> handler.handle(ctx)
                 AppRole.LOGGED_IN in permRoles && currentUser(ctx) != null -> handler.handle(ctx)
-                else -> ctx.status(401).header(Header.WWW_AUTHENTICATE, "Basic")
+                else -> when {
+                    ctx.fullUrl().contains("swagger", true) -> handler.handle(ctx)
+                    ctx.fullUrl().contains("redoc", true) -> handler.handle(ctx)
+                    else -> {
+                        ctx.status(401).header(Header.WWW_AUTHENTICATE, "Basic")
+                    }
+                }
             }
-        }*/
+        }
+//        config.compressionStrategy(Brotli(4), Gzip(6)) maven com.nixxcode.jvmbrotli
         config.enableDevLogging()
         JavalinVue.stateFunction = { ctx -> mapOf("currentUser" to currentUser(ctx)) }
     }.start(port)
@@ -48,7 +57,7 @@ fun main() {
 //    app.error(401, "html", VueComponent("<not-found></not-found>"))
 //    app.get("/api/users", UserController::getAll, roles(AppRole.ANYONE))
 //    app.get("/api/users/:userId", UserController::getOne, roles(AppRole.LOGGED_IN))
-   app.routes {
+    app.routes {
         path("/api/users") {
             get(UserController::getAll, roles(AppRole.ANYONE))
             post(UserController::create, roles(AppRole.ANYONE))
